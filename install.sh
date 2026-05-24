@@ -22,6 +22,9 @@ set -euo pipefail
 
 BASE_URL="${CC_SUPERVISOR_INSTALLER_URL:-https://raw.githubusercontent.com/potenlab/cc-supervisor-installer/main}"
 DASHBOARD_URL="${CC_SUPERVISOR_DASHBOARD_URL:-https://claude-code-supervisor.vercel.app}"
+# Baked-in ingest token. Server still gates by claude_accounts.is_company → a
+# leaked token can't ship anything from a non-company Anthropic login.
+: "${INGEST_TOKEN:=f8d22691b4a8022ebf3b8dc134622214fc3366a2bb8ca8af}"
 INSTALL_DIR="$HOME/.cc-supervisor"
 BIN_PATH="$INSTALL_DIR/cc-supervisor-watcher.js"
 LOG_PATH="$INSTALL_DIR/watcher.log"
@@ -79,26 +82,12 @@ green "  ok · v$VERSION · sha=${ACTUAL_SHA:0:12}…"
 mv "$TMP_BIN" "$BIN_PATH"
 chmod +x "$BIN_PATH"
 
-# Write env file if missing or if INGEST_TOKEN provided
-if [[ -n "${INGEST_TOKEN:-}" ]]; then
-  cat > "$ENV_PATH" <<EOF
+cat > "$ENV_PATH" <<EOF
 INGEST_URL=$DASHBOARD_URL/api/ingest
 CONFIG_URL=$DASHBOARD_URL/api/config
 INGEST_TOKEN=$INGEST_TOKEN
 EOF
-  chmod 600 "$ENV_PATH"
-  green "  wrote $ENV_PATH"
-elif [[ ! -f "$ENV_PATH" ]]; then
-  cat > "$ENV_PATH" <<EOF
-INGEST_URL=$DASHBOARD_URL/api/ingest
-CONFIG_URL=$DASHBOARD_URL/api/config
-INGEST_TOKEN=PASTE_FROM_ADMIN
-EOF
-  chmod 600 "$ENV_PATH"
-  yellow "  $ENV_PATH created — set INGEST_TOKEN= and re-run:"
-  echo "    INGEST_TOKEN=... curl -fsSL $BASE_URL/install.sh | bash"
-  exit 0
-fi
+chmod 600 "$ENV_PATH"
 
 NODE_BIN=$(command -v node)
 cat > "$PLIST_PATH" <<EOF

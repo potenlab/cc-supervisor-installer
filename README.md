@@ -7,14 +7,12 @@ Signed binary distribution for the [Claude Code Supervisor](https://claude-code-
 You need:
 - macOS
 - Node.js 22+
-- A Claude Code account that's in the **company allowlist** (ask Dion)
-- The `INGEST_TOKEN` (ask Dion)
+- A Claude Code account that's in the **company allowlist** (ask Dion if unsure)
 
 One-liner:
 
 ```bash
-INGEST_TOKEN=<paste-from-admin> \
-  curl -fsSL https://raw.githubusercontent.com/potenlab/cc-supervisor-installer/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/potenlab/cc-supervisor-installer/main/install.sh | bash
 ```
 
 The installer:
