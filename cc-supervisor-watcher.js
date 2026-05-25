@@ -7,9 +7,9 @@ var __export = (target, all) => {
 };
 
 // src/main.ts
-import { existsSync as existsSync4, readFileSync as readFileSync4 } from "node:fs";
-import { join as join6 } from "node:path";
-import { homedir as homedir4 } from "node:os";
+import { existsSync as existsSync5, readFileSync as readFileSync5 } from "node:fs";
+import { join as join7 } from "node:path";
+import { homedir as homedir5 } from "node:os";
 
 // src/install-id.ts
 import { randomUUID } from "node:crypto";
@@ -1785,9 +1785,9 @@ function watch(paths, options = {}) {
 }
 
 // src/watch.ts
-import { existsSync as existsSync3, statSync, openSync, readSync, closeSync, readFileSync as readFileSync3 } from "node:fs";
-import { homedir as homedir3 } from "node:os";
-import { join as join5 } from "node:path";
+import { existsSync as existsSync4, statSync as statSync2, openSync, readSync, closeSync, readFileSync as readFileSync4 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import { join as join6 } from "node:path";
 
 // ../../packages/shared/src/pricing.ts
 function normalizeModelId(raw) {
@@ -5946,6 +5946,76 @@ var evaluationSchema = external_exports.object({
 // src/parse.ts
 import { basename as basename3, dirname as dirname4 } from "node:path";
 import { execFileSync } from "node:child_process";
+
+// src/session-account.ts
+import { existsSync as existsSync2, readFileSync as readFileSync2, readdirSync, statSync } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import { join as join4 } from "node:path";
+var SESSIONS_DIR = join4(
+  homedir3(),
+  "Library",
+  "Application Support",
+  "Claude",
+  "claude-code-sessions"
+);
+var cache = /* @__PURE__ */ new Map();
+var CACHE_TTL_MS = 5 * 6e4;
+function scanForSession(targetSessionId) {
+  if (!existsSync2(SESSIONS_DIR)) return null;
+  let accountDirs;
+  try {
+    accountDirs = readdirSync(SESSIONS_DIR);
+  } catch {
+    return null;
+  }
+  for (const acc of accountDirs) {
+    if (!/^[0-9a-f-]{36}$/i.test(acc)) continue;
+    const accPath = join4(SESSIONS_DIR, acc);
+    let orgDirs;
+    try {
+      orgDirs = readdirSync(accPath);
+    } catch {
+      continue;
+    }
+    for (const org of orgDirs) {
+      const orgPath = join4(accPath, org);
+      let stat4;
+      try {
+        stat4 = statSync(orgPath);
+      } catch {
+        continue;
+      }
+      if (!stat4.isDirectory()) continue;
+      let files;
+      try {
+        files = readdirSync(orgPath);
+      } catch {
+        continue;
+      }
+      for (const f of files) {
+        if (!f.startsWith("local_") || !f.endsWith(".json")) continue;
+        const filePath = join4(orgPath, f);
+        try {
+          const raw = readFileSync2(filePath, "utf8");
+          if (!raw.includes(targetSessionId)) continue;
+          const obj = JSON.parse(raw);
+          if (obj.cliSessionId === targetSessionId) return acc;
+        } catch {
+        }
+      }
+    }
+  }
+  return null;
+}
+function resolveSessionAccount(sessionId) {
+  const hit = cache.get(sessionId);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.accountUuid;
+  const acc = scanForSession(sessionId);
+  cache.set(sessionId, { accountUuid: acc, at: Date.now() });
+  return acc;
+}
+
+// src/parse.ts
 var projectKeyCache = /* @__PURE__ */ new Map();
 function gitProjectKey(cwd) {
   if (projectKeyCache.has(cwd)) return projectKeyCache.get(cwd) ?? null;
@@ -6003,6 +6073,7 @@ function parseLines(text, ctx) {
     const prev = preview(m.text, 500);
     const sessionId = parentSessionId ?? entry.sessionId;
     const branch = entry.gitBranch && entry.gitBranch !== "HEAD" ? entry.gitBranch : null;
+    const resolvedAccountId = resolveSessionAccount(sessionId) ?? ctx.claudeAccountId;
     records.push({
       session_id: sessionId,
       project_path: cwd,
@@ -6023,24 +6094,24 @@ function parseLines(text, ctx) {
       tool_use_count: m.toolUseCount,
       raw_jsonl_path: ctx.filePath,
       raw_line_no: lineNo,
-      claude_account_id: ctx.claudeAccountId
+      claude_account_id: resolvedAccountId
     });
   }
   return records;
 }
 
 // src/offsets.ts
-import { existsSync as existsSync2, readFileSync as readFileSync2, writeFileSync as writeFileSync2, renameSync } from "node:fs";
-import { join as join4 } from "node:path";
-var FILE = join4(stateDir(), "offsets.json");
-var cache = null;
+import { existsSync as existsSync3, readFileSync as readFileSync3, writeFileSync as writeFileSync2, renameSync } from "node:fs";
+import { join as join5 } from "node:path";
+var FILE = join5(stateDir(), "offsets.json");
+var cache2 = null;
 function load() {
-  if (cache) return cache;
-  if (!existsSync2(FILE)) return cache = {};
+  if (cache2) return cache2;
+  if (!existsSync3(FILE)) return cache2 = {};
   try {
-    return cache = JSON.parse(readFileSync2(FILE, "utf8"));
+    return cache2 = JSON.parse(readFileSync3(FILE, "utf8"));
   } catch {
-    return cache = {};
+    return cache2 = {};
   }
 }
 function get(path) {
@@ -6055,10 +6126,10 @@ function setOffset(path, n) {
 }
 
 // src/watch.ts
-var PROJECTS_DIR = join5(homedir3(), ".claude", "projects");
+var PROJECTS_DIR = join6(homedir4(), ".claude", "projects");
 function readNew(filePath) {
-  if (!existsSync3(filePath)) return null;
-  const stat4 = statSync(filePath);
+  if (!existsSync4(filePath)) return null;
+  const stat4 = statSync2(filePath);
   const prev = get(filePath);
   if (stat4.size <= prev) return null;
   const fd = openSync(filePath, "r");
@@ -6081,7 +6152,7 @@ var cwdCache = /* @__PURE__ */ new Map();
 function getCwdFromFile(filePath) {
   if (cwdCache.has(filePath)) return cwdCache.get(filePath) ?? null;
   try {
-    const head = readFileSync3(filePath, "utf8").slice(0, 32768);
+    const head = readFileSync4(filePath, "utf8").slice(0, 32768);
     for (const line of head.split("\n")) {
       if (!line) continue;
       try {
@@ -6222,9 +6293,9 @@ async function fetchUsage(token) {
 
 // src/main.ts
 function loadEnvFile() {
-  const p = join6(homedir4(), ".cc-supervisor", "watcher.env");
-  if (!existsSync4(p)) return;
-  for (const line of readFileSync4(p, "utf8").split("\n")) {
+  const p = join7(homedir5(), ".cc-supervisor", "watcher.env");
+  if (!existsSync5(p)) return;
+  for (const line of readFileSync5(p, "utf8").split("\n")) {
     const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.*)\s*$/);
     if (m) process.env[m[1]] = m[2];
   }
@@ -6267,10 +6338,15 @@ function buildWatcher() {
     claudeAccountId: cachedProfile?.uuid ?? null,
     noisePrefixes,
     onRecords: async (records) => {
-      if (allowedAccountIds.size > 0 && (!cachedProfile || !allowedAccountIds.has(cachedProfile.uuid))) {
-        return;
+      let kept = records;
+      if (allowedAccountIds.size > 0) {
+        kept = records.filter((r) => {
+          if (r.claude_account_id) return allowedAccountIds.has(r.claude_account_id);
+          return cachedProfile != null && allowedAccountIds.has(cachedProfile.uuid);
+        });
       }
-      queue.push(...records);
+      if (kept.length === 0) return;
+      queue.push(...kept);
       scheduleFlush();
     }
   });
