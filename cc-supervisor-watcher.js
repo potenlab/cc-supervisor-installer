@@ -6315,7 +6315,7 @@ var queue = [];
 var flushTimer = null;
 function scheduleFlush() {
   if (flushTimer) return;
-  flushTimer = setTimeout(flush, 1e3);
+  flushTimer = setTimeout(flush, 5e3);
 }
 async function flush() {
   flushTimer = null;
@@ -6413,7 +6413,7 @@ async function snapshotUsage() {
 void refreshConfig();
 setInterval(refreshConfig, 5 * 60 * 1e3);
 void snapshotUsage();
-setInterval(snapshotUsage, 60 * 1e3);
+setInterval(snapshotUsage, 5 * 60 * 1e3);
 var shutdown = async () => {
   console.log("[cc-supervisor] shutting down");
   if (watcher) await watcher.close();
