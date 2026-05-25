@@ -1798,7 +1798,7 @@ function normalizeModelId(raw) {
 
 // ../../packages/shared/src/jsonl.ts
 import { createHash } from "node:crypto";
-function extractMessage(entry) {
+function extractMessage(entry, opts = {}) {
   const t = entry.type;
   if (t !== "user" && t !== "assistant") return null;
   if (entry.isMeta === true) return null;
@@ -1828,6 +1828,12 @@ function extractMessage(entry) {
   }
   if (t === "user" && sawToolResult && !sawTextBlock) return null;
   if (t === "user" && /^\[Request interrupted by user/.test(text.trim())) return null;
+  if (t === "user" && opts.noisePrefixes && opts.noisePrefixes.length > 0) {
+    const trimmed = text.trim();
+    for (const p of opts.noisePrefixes) {
+      if (p && trimmed.startsWith(p)) return null;
+    }
+  }
   const usage = msg.usage ? {
     input: msg.usage.input_tokens ?? 0,
     output: msg.usage.output_tokens ?? 0,
@@ -5988,7 +5994,7 @@ function parseLines(text, ctx) {
     } catch {
       continue;
     }
-    const m = extractMessage(entry);
+    const m = extractMessage(entry, { noisePrefixes: ctx.noisePrefixes });
     if (!m) continue;
     if (isSubagent && m.role === "user") continue;
     if (!entry.sessionId || !entry.uuid || !entry.timestamp) continue;
@@ -5996,10 +6002,12 @@ function parseLines(text, ctx) {
     const projectKey = gitProjectKey(cwd);
     const prev = preview(m.text, 500);
     const sessionId = parentSessionId ?? entry.sessionId;
+    const branch = entry.gitBranch && entry.gitBranch !== "HEAD" ? entry.gitBranch : null;
     records.push({
       session_id: sessionId,
       project_path: cwd,
       project_key: projectKey,
+      git_branch: branch,
       uuid: entry.uuid,
       parent_uuid: entry.parentUuid ?? null,
       role: m.role,
@@ -6111,7 +6119,8 @@ function startWatch(cfg) {
     const records = parseLines(chunk.text, {
       filePath,
       startLineNo: chunk.startLine,
-      claudeAccountId: cfg.claudeAccountId
+      claudeAccountId: cfg.claudeAccountId,
+      noisePrefixes: cfg.noisePrefixes
     });
     if (records.length === 0) {
       setOffset(filePath, chunk.newOffset);
@@ -6229,6 +6238,7 @@ console.log(`[cc-supervisor] install_id=${installId} host=${hostname2}`);
 var allowed = [];
 var monitorAllPaths = false;
 var allowedAccountIds = /* @__PURE__ */ new Set();
+var noisePrefixes = [];
 var watcher = null;
 var queue = [];
 var flushTimer = null;
@@ -6255,6 +6265,7 @@ function buildWatcher() {
     allowedPrefixes: allowed,
     monitorAllPaths,
     claudeAccountId: cachedProfile?.uuid ?? null,
+    noisePrefixes,
     onRecords: async (records) => {
       if (allowedAccountIds.size > 0 && (!cachedProfile || !allowedAccountIds.has(cachedProfile.uuid))) {
         return;
@@ -6269,13 +6280,15 @@ async function refreshConfig() {
     const c = await fetchConfig(env, installId);
     const prefixesChanged = c.allowed_path_prefixes.join("|") !== allowed.join("|");
     const modeChanged = c.monitor_all_paths !== monitorAllPaths;
+    const noiseChanged = (c.noise_prefixes ?? []).join("|") !== noisePrefixes.join("|");
     allowed = c.allowed_path_prefixes;
     monitorAllPaths = c.monitor_all_paths;
     allowedAccountIds = new Set(c.allowed_account_ids ?? []);
+    noisePrefixes = c.noise_prefixes ?? [];
     console.log(
-      `[cc-supervisor] config: ${monitorAllPaths ? "monitor-all" : `${allowed.length} prefixes`}` + (allowedAccountIds.size > 0 ? ` \xB7 company-accounts=${allowedAccountIds.size}` : " \xB7 all-accounts") + (prefixesChanged || modeChanged ? " (changed)" : "")
+      `[cc-supervisor] config: ${monitorAllPaths ? "monitor-all" : `${allowed.length} prefixes`}` + (allowedAccountIds.size > 0 ? ` \xB7 company-accounts=${allowedAccountIds.size}` : " \xB7 all-accounts") + ` \xB7 noise-prefixes=${noisePrefixes.length}` + (prefixesChanged || modeChanged || noiseChanged ? " (changed)" : "")
     );
-    if (prefixesChanged || modeChanged) {
+    if (prefixesChanged || modeChanged || noiseChanged) {
       if (watcher) await watcher.close();
       watcher = buildWatcher();
     } else if (!watcher) {
